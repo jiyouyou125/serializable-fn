@@ -3,6 +3,8 @@
   (:import [serializable.fn Utils])
   (:refer-clojure :exclude [fn]))
 
+(set! *warn-on-reflection* true)
+
 (defn- save-env [bindings form]
   (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
                (meta form))
@@ -15,7 +17,7 @@
 (defmacro ^{:doc (str (:doc (meta #'clojure.core/fn))
                       "\n\n  Oh, but it also allows serialization!!!111eleven")}
   fn [& sigs]
-  (let [[env-form namespace form] (save-env (vals &env) &form)]    
+  (let [[env-form namespace form] (save-env (vals &env) &form)]
     `(with-meta (clojure.core/fn ~@sigs)
        {:type ::serializable-fn
         ::env ~env-form
@@ -46,7 +48,7 @@
        (sort-by (fn [v] (if (-> v meta :dynamic) 1 0)))
        first ))
 
-(def SERIALIZED-TYPES
+(def ^{:const true} SERIALIZED-TYPES
   {:find-var 1
    :serfn 2
    :java 3
@@ -100,14 +102,14 @@
 
 (defn best-effort-map-val [amap afn]
   (into {}
-       (mapcat
-        (fn [[name val]]
-          (try
-            [[name (afn val)]]
-            (catch Exception e
-              []
-              )))
-        amap)))
+        (mapcat
+         (fn [[name val]]
+           (try
+             [[name (afn val)]]
+             (catch Exception e
+               []
+               )))
+         amap)))
 
 (defmethod serialize-val :serfn [val]
   (let [[env namespace source] ((juxt ::env ::namespace ::source) (meta val))
@@ -152,8 +154,8 @@
         old-ns (-> *ns* str symbol)
         bindings (mapcat (fn [[name val]] [(symbol name) `(*GLOBAL-ENV* ~name)]) env)
         to-eval `(let ~(vec bindings) ~source-form)]
-    (Utils/tryRequire (str namespace))      
+    (Utils/tryRequire (str namespace))
     (vary-meta (binding [*ns* (create-ns namespace) *GLOBAL-ENV* env]
-                  (eval to-eval))
-                merge
-                rest-meta)))
+                 (eval to-eval))
+               merge
+               rest-meta)))
