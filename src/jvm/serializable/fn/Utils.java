@@ -12,58 +12,66 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Utils {
-    
-    public static byte[] serialize(Object obj) throws IOException {
-        KryoSerialization kryo = new KryoSerialization();
-        return kryo.serialize(obj);
+
+  static final Var require = RT.var("clojure.core", "require");
+  static final Var symbol = RT.var("clojure.core", "symbol");
+
+  public static synchronized byte[] serialize(Object obj) throws IOException {
+    KryoSerialization kryo = new KryoSerialization();
+    return kryo.serialize(obj);
+  }
+
+  public static synchronized Object deserialize(byte[] serialized) throws IOException {
+    KryoSerialization kryo = new KryoSerialization();
+    return kryo.deserialize(serialized);
+  }
+
+  public static Throwable getRootCause(Throwable e) {
+    Throwable rootCause = e;
+    Throwable nextCause = rootCause.getCause();
+
+    while (nextCause != null) {
+      rootCause = nextCause;
+      nextCause = rootCause.getCause();
     }
+    return rootCause;
+  }
 
-    public static Object deserialize(byte[] serialized) throws IOException {
-        KryoSerialization kryo = new KryoSerialization();
-        return kryo.deserialize(serialized);
+  @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
+  public static synchronized void tryRequire(String ns_name) {
+    try {
+      require.invoke(symbol.invoke(ns_name));
+    } catch (Exception e) {
+
+      //if playing from the repl and defining functions, file won't exist
+      Throwable rootCause = getRootCause(e);
+
+      boolean fileNotFound = (rootCause instanceof FileNotFoundException);
+      boolean nsFileMissing = e.getMessage().contains(ns_name + ".clj on classpath");
+
+      if (!(fileNotFound && nsFileMissing))
+        throw new RuntimeException(e);
     }
-    
-    static Var require = RT.var("clojure.core", "require");
-    static Var symbol = RT.var("clojure.core", "symbol");
+  }
 
-    public static Throwable getRootCause(Throwable e) {
-        Throwable rootCause = e;
-        Throwable nextCause = rootCause.getCause();
+  public static synchronized IFn bootSimpleFn(String ns_name, String fn_name) {
+    return (IFn) bootSimpleVar(ns_name, fn_name).deref();
+  }
 
-        while (nextCause != null) {
-            rootCause = nextCause;
-            nextCause = rootCause.getCause();
-        }
-        return rootCause;
-    }
+  public static synchronized MultiFn bootSimpleMultifn(String ns_name, String fn_name) {
+    return (MultiFn) bootSimpleVar(ns_name, fn_name).deref();
+  }
 
-    @SuppressWarnings("ThrowableResultOfMethodCallIgnored")
-    public static void tryRequire(String ns_name) {
-        try {
-            require.invoke(symbol.invoke(ns_name));
-        } catch (Exception e) {
+  public static synchronized Var bootSimpleVar(String ns_name, String fn_name) {
+    tryRequire(ns_name);
+    return RT.var(ns_name, fn_name);
+  }
 
-            //if playing from the repl and defining functions, file won't exist
-            Throwable rootCause = getRootCause(e);
+  public static synchronized IFn deserializeFn(byte[] fnSpec) {
+    return (IFn) bootSimpleFn("serializable.fn", "deserialize").invoke(fnSpec);
+  }
 
-            boolean fileNotFound = (rootCause instanceof FileNotFoundException);
-            boolean nsFileMissing = e.getMessage().contains(ns_name + ".clj on classpath");
-
-            if (!(fileNotFound && nsFileMissing))
-                throw new RuntimeException(e);
-        }
-    }
-
-    public static IFn bootSimpleFn(String ns_name, String fn_name) {
-        return (IFn) bootSimpleVar(ns_name, fn_name).deref();
-    }
-
-    public static MultiFn bootSimpleMultifn(String ns_name, String fn_name) {
-        return (MultiFn) bootSimpleVar(ns_name, fn_name).deref();
-    }
-    
-    public static Var bootSimpleVar(String ns_name, String fn_name) {
-        tryRequire(ns_name);
-        return RT.var(ns_name, fn_name);
-    }    
+  public static synchronized byte[] serializeFn(IFn fn) {
+    return (byte[]) bootSimpleFn("serializable.fn", "serialize").invoke(fn);
+  }
 }

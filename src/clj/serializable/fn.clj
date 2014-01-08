@@ -3,8 +3,6 @@
   (:import [serializable.fn Utils])
   (:refer-clojure :exclude [fn]))
 
-(set! *warn-on-reflection* true)
-
 (defn- save-env [bindings form]
   (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
                (meta form))

@@ -7,6 +7,6 @@
   :javac-options ["-source" "1.6" "-target" "1.6"]
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.4.0"]
+  :dependencies [[org.clojure/clojure "1.5.1"]
                  [com.esotericsoftware.kryo/kryo "2.17"]
-                 [storm/carbonite "1.5.0"]])
+                 [com.twitter/carbonite "1.3.2"]])

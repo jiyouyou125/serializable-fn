@@ -13,59 +13,59 @@ import java.util.HashSet;
 
 public class KryoSerialization {
 
-    private static final ThreadLocal<Kryo> kryo = new ThreadLocal<Kryo>();
-    private static final ThreadLocal<ByteArrayOutputStream> byteStream = new ThreadLocal<ByteArrayOutputStream>();
+  private static final ThreadLocal<Kryo> kryo = new ThreadLocal<Kryo>();
+  private static final ThreadLocal<ByteArrayOutputStream> byteStream = new ThreadLocal<ByteArrayOutputStream>();
 
-    public KryoSerialization() {
+  public KryoSerialization() {
+  }
+
+  private Kryo freshKryo() {
+    Kryo k = new Kryo();
+    k.setInstantiatorStrategy(new StdInstantiatorStrategy());
+    k.setRegistrationRequired(false);
+
+    try {
+      enhanceRegistry(k);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
 
-    private Kryo freshKryo() {
-        Kryo k = new Kryo();
-        k.setInstantiatorStrategy(new StdInstantiatorStrategy());
-        k.setRegistrationRequired(false);
-        
-        try {
-            enhanceRegistry(k);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        
-        k.register(ArrayList.class);
-        k.register(HashMap.class);
-        k.register(HashSet.class);
+    k.register(ArrayList.class);
+    k.register(HashMap.class);
+    k.register(HashSet.class);
 
-        return k;
-    }
+    return k;
+  }
 
-    public Kryo getKryo() {
-        if (kryo.get() == null)
-            kryo.set(freshKryo());
+  public Kryo getKryo() {
+    if (kryo.get() == null)
+      kryo.set(freshKryo());
 
-        return kryo.get();
-    }
+    return kryo.get();
+  }
 
-    public ByteArrayOutputStream getByteStream() {
-        if (byteStream.get() == null)
-            byteStream.set(new ByteArrayOutputStream());
+  public ByteArrayOutputStream getByteStream() {
+    if (byteStream.get() == null)
+      byteStream.set(new ByteArrayOutputStream());
 
-        return byteStream.get();
-    }
+    return byteStream.get();
+  }
 
-    public byte[] serialize(Object o) {
-        getByteStream().reset();
-        Output ko = new Output(getByteStream());
-        getKryo().writeClassAndObject(ko, o);
-        ko.flush();
-        byte[] bytes = getByteStream().toByteArray();
+  public byte[] serialize(Object o) {
+    getByteStream().reset();
+    Output ko = new Output(getByteStream());
+    getKryo().writeClassAndObject(ko, o);
+    ko.flush();
+    byte[] bytes = getByteStream().toByteArray();
 
-        return bytes;
-    }
+    return bytes;
+  }
 
-    public Object deserialize(byte[] bytes) {
-        return getKryo().readClassAndObject(new Input(bytes));
-    }
+  public Object deserialize(byte[] bytes) {
+    return getKryo().readClassAndObject(new Input(bytes));
+  }
 
-    public <T> T deserialize(byte[] bytes, Class<T> klass) {
-        return getKryo().readObject(new Input(bytes), klass);
-    }
+  public <T> T deserialize(byte[] bytes, Class<T> klass) {
+    return getKryo().readObject(new Input(bytes), klass);
+  }
 }
