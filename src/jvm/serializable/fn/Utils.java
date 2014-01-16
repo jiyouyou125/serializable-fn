@@ -4,7 +4,8 @@ import clojure.lang.IFn;
 import clojure.lang.MultiFn;
 import clojure.lang.RT;
 import clojure.lang.Var;
-import serializable.fn.kryo.KryoSerialization;
+import serializable.fn.kryo.ClojureKryoInstantiator;
+import com.twitter.chill.KryoPool;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -15,15 +16,14 @@ public class Utils {
 
   static final Var require = RT.var("clojure.core", "require");
   static final Var symbol = RT.var("clojure.core", "symbol");
+  static KryoPool _kpool = new ClojureKryoInstantiator().defaultPool();
 
-  public static synchronized byte[] serialize(Object obj) throws IOException {
-    KryoSerialization kryo = new KryoSerialization();
-    return kryo.serialize(obj);
+  public static byte[] serialize(Object obj) throws IOException {
+    return _kpool.toBytesWithClass(obj);
   }
 
-  public static synchronized Object deserialize(byte[] serialized) throws IOException {
-    KryoSerialization kryo = new KryoSerialization();
-    return kryo.deserialize(serialized);
+  public static Object deserialize(byte[] serialized) throws IOException {
+    return _kpool.fromBytes(serialized);
   }
 
   public static Throwable getRootCause(Throwable e) {

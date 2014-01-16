@@ -8,5 +8,5 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
-                 [com.esotericsoftware.kryo/kryo "2.17"]
-                 [com.twitter/carbonite "1.3.2"]])
+                 [com.twitter/chill-java "0.3.5"]
+                 [com.twitter/carbonite "1.3.3-SNAPSHOT"]])
