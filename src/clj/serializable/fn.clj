@@ -1,7 +1,11 @@
 (ns serializable.fn
   "Serializable functions! Check it out."
+  (:require [clojure.tools.logging :as log])
   (:import [serializable.fn Utils])
   (:refer-clojure :exclude [fn]))
+
+(def ^:dynamic *serialize* #(Utils/serialize %))
+(def ^:dynamic *deserialize* #(Utils/deserialize %))
 
 (defn- save-env [bindings form]
   (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
@@ -73,10 +77,10 @@
 (defn serialize [val]
   (let [type (serialize-type val)
         serialized (serialize-val val)]
-    (Utils/serialize {:token (type->token type) :val-ser serialized})))
+    (*serialize* {:token (type->token type) :val-ser serialized})))
 
 (defmethod serialize-val :java [val]
-  (Utils/serialize val))
+  (*serialize* val))
 
 (defn ns-fn-name-pair [v]
   (let [m (meta v)]
@@ -96,7 +100,7 @@
 
 (defmethod serialize-val :var [avar]
   (let [[ns fn-name] (ns-fn-name-pair avar)]
-    (Utils/serialize {:ns ns :fn-name fn-name})))
+    (*serialize* {:ns ns :fn-name fn-name})))
 
 (defn best-effort-map-val [amap afn]
   (into {}
@@ -105,6 +109,8 @@
            (try
              [[name (afn val)]]
              (catch Exception e
+               (log/trace (format "caught exception: %s" e))
+               (log/trace (format "unable to call %s on %s in %s" afn val amap))
                []
                )))
          amap)))
@@ -114,38 +120,38 @@
         ser-meta (-> (meta val)
                      (dissoc ::env ::namespace ::source)
                      (best-effort-map-val serialize)
-                     Utils/serialize)
-        ser-env (-> env (best-effort-map-val serialize) Utils/serialize)]
-    (Utils/serialize {:ser-meta ser-meta :ser-env ser-env :ns namespace :source source})))
+                     *serialize*)
+        ser-env (-> env (best-effort-map-val serialize) *serialize*)]
+    (*serialize* {:ser-meta ser-meta :ser-env ser-env :ns namespace :source source})))
 
 (defmulti deserialize-val (fn [token serialized]
                             (token->type token)))
 
 (defn deserialize [serialized]
-  (let [{:keys [token val-ser]} (Utils/deserialize serialized)]
+  (let [{:keys [token val-ser]} (*deserialize* serialized)]
     (deserialize-val token val-ser)))
 
 (defmethod deserialize-val :find-var [_ serialized]
-  (let [{:keys [ns fn-name]} (Utils/deserialize serialized)]
+  (let [{:keys [ns fn-name]} (*deserialize* serialized)]
     (Utils/bootSimpleFn ns fn-name)))
 
 (defmethod deserialize-val :multifn [_ serialized]
-  (let [{:keys [ns fn-name]} (Utils/deserialize serialized)]
+  (let [{:keys [ns fn-name]} (*deserialize* serialized)]
     (Utils/bootSimpleMultifn ns fn-name)))
 
 (defmethod deserialize-val :var [_ serialized]
-  (let [{:keys [ns fn-name]} (Utils/deserialize serialized)]
+  (let [{:keys [ns fn-name]} (*deserialize* serialized)]
     (Utils/bootSimpleVar ns fn-name)))
 
 (defmethod deserialize-val :java [_ serialized]
-  (Utils/deserialize serialized))
+  (*deserialize* serialized))
 
 (def ^:dynamic *GLOBAL-ENV* {})
 
 (defmethod deserialize-val :serfn [_ serialized]
-  (let [{:keys [ser-meta ser-env ns source]} (Utils/deserialize serialized)
-        rest-meta (best-effort-map-val (Utils/deserialize ser-meta) deserialize)
-        env (best-effort-map-val (Utils/deserialize ser-env) deserialize)
+  (let [{:keys [ser-meta ser-env ns source]} (*deserialize* serialized)
+        rest-meta (best-effort-map-val (*deserialize* ser-meta) deserialize)
+        env (best-effort-map-val (*deserialize* ser-env) deserialize)
         source-form (try (read-string source) (catch Exception e
                                                 (throw (RuntimeException. (str "Could not deserialize " source)))))
         namespace (symbol ns)
