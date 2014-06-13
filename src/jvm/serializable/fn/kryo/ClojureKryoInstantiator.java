@@ -1,5 +1,6 @@
 package serializable.fn.kryo;
 
+import com.esotericsoftware.kryo.Kryo;
 import com.twitter.chill.KryoInstantiator;
 import com.twitter.chill.KryoPool;
 import carbonite.JavaBridge;
