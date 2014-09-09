@@ -12,7 +12,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class Utils {
+
+  final static Logger LOG = LoggerFactory.getLogger(Utils.class);
 
   static final Var require = RT.var("clojure.core", "require");
   static final Var symbol = RT.var("clojure.core", "symbol");
@@ -55,14 +60,17 @@ public class Utils {
   }
 
   public static synchronized IFn bootSimpleFn(String ns_name, String fn_name) {
+    LOG.trace("bootSimpleFn: " + ns_name + "/" + fn_name);
     return (IFn) bootSimpleVar(ns_name, fn_name).deref();
   }
 
   public static synchronized MultiFn bootSimpleMultifn(String ns_name, String fn_name) {
+    LOG.trace("bootSimpleMultiFn: " + ns_name + "/" + fn_name);
     return (MultiFn) bootSimpleVar(ns_name, fn_name).deref();
   }
 
   public static synchronized Var bootSimpleVar(String ns_name, String fn_name) {
+    LOG.trace("bootSimpleVar: " + ns_name + "/" + fn_name);
     tryRequire(ns_name);
     return RT.var(ns_name, fn_name);
   }

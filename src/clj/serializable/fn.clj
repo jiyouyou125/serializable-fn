@@ -1,7 +1,8 @@
 (ns serializable.fn
   "Serializable functions! Check it out."
   (:require [clojure.tools.logging :as log])
-  (:import [serializable.fn Utils])
+  (:import [serializable.fn Utils]
+           [java.io Writer])
   (:refer-clojure :exclude [fn]))
 
 (def ^:dynamic *serialize* #(Utils/serialize %))
@@ -11,10 +12,11 @@
   (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
                (meta form))
         namespace (str *ns*)
-        savers (for [b bindings] [(str (.sym b)) (.sym b)])
+        savers (for [^clojure.lang.Compiler$LocalBinding b bindings]
+                 [(str (.sym b)) (.sym b)])
         env-form `(into {} ~(vec savers))]
     ;; without the print-dup, it sometimes serializes invalid code strings (with subforms replaced with "#")
-    [env-form namespace (binding [*print-dup* true] (pr-str form))]))
+    [env-form namespace (binding [*print-dup* false] (pr-str form))]))
 
 (defmacro ^{:doc (str (:doc (meta #'clojure.core/fn))
                       "\n\n  Oh, but it also allows serialization!!!111eleven")}
@@ -48,12 +50,12 @@
        (filter #(and (var? %) (= (var-get %) val)))
        (filter (complement recent-eval?))
        (sort-by (fn [v] (if (-> v meta :dynamic) 1 0)))
-       first ))
+       first))
 
 (def ^{:const true} SERIALIZED-TYPES
   {:find-var 1
    :serfn 2
-   :java 3
+   :kryo 3
    :var 4
    :multifn 5})
 
@@ -70,16 +72,18 @@
         (fn? val) (if (= ::serializable-fn (-> val meta :type))
                     :serfn
                     :find-var)
-        :else :java))
+        :else :kryo))
 
 (defmulti serialize-val serialize-type)
 
 (defn serialize [val]
   (let [type (serialize-type val)
         serialized (serialize-val val)]
+    (log/trace "serializing:" val "of type:" type)
     (*serialize* {:token (type->token type) :val-ser serialized})))
 
-(defmethod serialize-val :java [val]
+(defmethod serialize-val :kryo [val]
+  (log/trace "serializing kryo:" val)
   (*serialize* val))
 
 (defn ns-fn-name-pair [v]
@@ -100,6 +104,7 @@
 
 (defmethod serialize-val :var [avar]
   (let [[ns fn-name] (ns-fn-name-pair avar)]
+    (log/trace "serializing var:" ns "/" fn-name)
     (*serialize* {:ns ns :fn-name fn-name})))
 
 (defn best-effort-map-val [amap afn]
@@ -116,7 +121,11 @@
          amap)))
 
 (defmethod serialize-val :serfn [val]
+  (log/trace "serializing serfn:" val)
   (let [[env namespace source] ((juxt ::env ::namespace ::source) (meta val))
+        _ (log/trace "serfn env" env)
+        _ (log/trace "serfn meta" (-> (meta val)
+                                      (dissoc ::env ::namespace ::source)))
         ser-meta (-> (meta val)
                      (dissoc ::env ::namespace ::source)
                      (best-effort-map-val serialize)
@@ -133,33 +142,44 @@
 
 (defmethod deserialize-val :find-var [_ serialized]
   (let [{:keys [ns fn-name]} (*deserialize* serialized)]
+    (log/trace "deserializing find-var:" ns "/" fn-name)
     (Utils/bootSimpleFn ns fn-name)))
 
 (defmethod deserialize-val :multifn [_ serialized]
   (let [{:keys [ns fn-name]} (*deserialize* serialized)]
+    (log/trace "deserializing multifn:" ns "/" fn-name)
     (Utils/bootSimpleMultifn ns fn-name)))
 
 (defmethod deserialize-val :var [_ serialized]
   (let [{:keys [ns fn-name]} (*deserialize* serialized)]
+    (log/trace "deserializing var:" ns "/" fn-name)
     (Utils/bootSimpleVar ns fn-name)))
 
-(defmethod deserialize-val :java [_ serialized]
+(defmethod deserialize-val :kryo [_ serialized]
+  (log/trace "deserializing kryo")
   (*deserialize* serialized))
 
-(def ^:dynamic *GLOBAL-ENV* {})
+(def ^:dynamic *global-env* {})
 
 (defmethod deserialize-val :serfn [_ serialized]
   (let [{:keys [ser-meta ser-env ns source]} (*deserialize* serialized)
+        _ (log/trace "deserializing serfn:" source)
         rest-meta (best-effort-map-val (*deserialize* ser-meta) deserialize)
+        _ (log/trace "meta:" rest-meta)
         env (best-effort-map-val (*deserialize* ser-env) deserialize)
+        _ (log/trace "env:" env)
         source-form (try (read-string source) (catch Exception e
                                                 (throw (RuntimeException. (str "Could not deserialize " source)))))
         namespace (symbol ns)
         old-ns (-> *ns* str symbol)
-        bindings (mapcat (fn [[name val]] [(symbol name) `(*GLOBAL-ENV* ~name)]) env)
-        to-eval `(let ~(vec bindings) ~source-form)]
+        bindings (mapcat (fn [[name val]] [(symbol name) `(*global-env* ~name)]) env)
+        to-eval `(let ~(vec bindings) ~source-form)
+        _ (log/trace "to-eval:" to-eval)]
     (Utils/tryRequire (str namespace))
-    (vary-meta (binding [*ns* (create-ns namespace) *GLOBAL-ENV* env]
+    (vary-meta (binding [*ns* (create-ns namespace) *global-env* env]
                  (eval to-eval))
                merge
                rest-meta)))
+
+(defmethod print-method ::serializable-fn [o ^Writer w]
+  (print-method (::source (meta o)) w))
