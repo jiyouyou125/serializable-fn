@@ -15,17 +15,15 @@
   (is (= 2 (dinc 0))))
 
 (deftest metadata-fns-return-source
-  (is (= dinc-list (:serializable.fn/source (meta dinc)))))
+  (is (.contains (:serializable.fn/source (meta dinc))(pr-str dinc-list) )))
 
 (deftest printing-fns-show-source
-  (is (= (pr-str dinc-list)
-         (pr-str dinc))))
+    (is (.contains (pr-str dinc) (pr-str dinc-list))))
 
 (deftest preserve-reader-metadata
-  (is (number? (:line (meta (:serializable.fn/source
-                             (meta dinc)))))))
+  (is (number? (:serializable.fn/line (meta dinc)))))
 
-(def write+read (comp eval read-string pr-str))
+(def write+read (comp deserialize serialize))
 
 (defn round-trip [f & args]
   (apply (write+read f) args))

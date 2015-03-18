@@ -21,12 +21,15 @@
 (defmacro ^{:doc (str (:doc (meta #'clojure.core/fn))
                       "\n\n  Oh, but it also allows serialization!!!111eleven")}
   fn [& sigs]
-  (let [[env-form namespace form] (save-env (vals &env) &form)]
+  (let [[env-form namespace source] (save-env (vals &env) &form)
+        form-meta (meta &form)]
     `(with-meta (clojure.core/fn ~@sigs)
        {:type ::serializable-fn
+        ::line (get ~form-meta :line)
+        ::column (get ~form-meta :column)
         ::env ~env-form
         ::namespace ~namespace
-        ::source ~form})))
+        ::source ~source})))
 
 (defn- try-parse-num [^String s]
   (try
@@ -182,4 +185,5 @@
                rest-meta)))
 
 (defmethod print-method ::serializable-fn [o ^Writer w]
-  (print-method (::source (meta o)) w))
+  (let [m (meta o)]
+    (print-method (str (::namespace m) ":" (::line m) ":" (::column m) " " (::source m))  w)))
