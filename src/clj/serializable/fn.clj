@@ -8,10 +8,26 @@
 (def ^:dynamic *serialize* #(Utils/serialize %))
 (def ^:dynamic *deserialize* #(Utils/deserialize %))
 
-(defn- save-env [bindings form]
-  (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
-               (meta form))
+(defn- mangle-name [name]
+  (clojure.lang.Compiler/munge name))
+
+(defn- generate-function-name [line column form]
+  (let [first-param (first (rest form))
+        custom-fn-name? (not (vector? first-param))]
+        (if custom-fn-name?
+          nil
+          (symbol (mangle-name  (str *ns* "_sfn_" line \_ column))))))
+
+(defn- save-env [bindings form fn-name]
+  (let [
         namespace (str *ns*)
+        ; replace core/fn , with serializable/fn
+        ; give anonymous fn a name, so it will show up in stacktraces
+        form (with-meta (cons `fn (if fn-name
+                                    (cons  fn-name (rest form))
+                                    (rest form)
+                                    ))
+               (meta form))
         savers (for [^clojure.lang.Compiler$LocalBinding b bindings]
                  [(str (.sym b)) (.sym b)])
         env-form `(into {} ~(vec savers))]
@@ -21,12 +37,20 @@
 (defmacro ^{:doc (str (:doc (meta #'clojure.core/fn))
                       "\n\n  Oh, but it also allows serialization!!!111eleven")}
   fn [& sigs]
-  (let [[env-form namespace form] (save-env (vals &env) &form)]
-    `(with-meta (clojure.core/fn ~@sigs)
+  (let [form-meta (meta &form)
+        line (get form-meta :line)
+        column (get form-meta :column)
+        fn-name (generate-function-name line column &form)
+        [env-form namespace source] (save-env (vals &env) &form fn-name)]
+    `(with-meta (clojure.core/fn ~@(if fn-name
+                                     (cons  fn-name sigs)
+                                     sigs))
        {:type ::serializable-fn
+        ::line ~line
+        ::column ~column
         ::env ~env-form
         ::namespace ~namespace
-        ::source ~form})))
+        ::source ~source})))
 
 (defn- try-parse-num [^String s]
   (try
@@ -182,4 +206,5 @@
                rest-meta)))
 
 (defmethod print-method ::serializable-fn [o ^Writer w]
-  (print-method (::source (meta o)) w))
+  (let [m (meta o)]
+    (print-method (str (::namespace m) ":" (::line m) ":" (::column m) " " (::source m))  w)))

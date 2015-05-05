@@ -15,23 +15,27 @@
   (is (= 2 (dinc 0))))
 
 (deftest metadata-fns-return-source
-  (is (= dinc-list (:serializable.fn/source (meta dinc)))))
+  (is (.contains (:serializable.fn/source (meta dinc))(str (first (drop 2 dinc-list))) )))
 
 (deftest printing-fns-show-source
-  (is (= (pr-str dinc-list)
-         (pr-str dinc))))
+    (is (.contains (pr-str dinc) (str (first (drop 2 dinc-list))))))
 
 (deftest preserve-reader-metadata
-  (is (number? (:line (meta (:serializable.fn/source
-                             (meta dinc)))))))
+  (is (number? (:serializable.fn/line (meta dinc)))))
 
-(def write+read (comp eval read-string pr-str))
+(def write+read (comp deserialize serialize))
 
 (defn round-trip [f & args]
   (apply (write+read f) args))
 
 (deftest serializable-fn-roundtrip!!!111eleven
   (is (= 2 (round-trip dinc 0))))
+
+(deftest stacktraces-contain-line-col
+  (try ((fn []
+        (throw (RuntimeException.))))
+       (catch RuntimeException e
+         (is (re-matches #".*_test_sfn_\d{1,3}_\d{1,3}_.*" (str (first (.getStackTrace e))) )))))
 
 (deftest roundtrip-with-lexical-nonconst-context
   (let [x 10, y (inc x)]
