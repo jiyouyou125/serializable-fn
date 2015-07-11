@@ -138,8 +138,8 @@
            (try
              [[name (afn val)]]
              (catch Exception e
-               (log/warn (format "caught exception: %s" e))
-               (log/warn (format "unable to call %s on %s in %s" afn val amap))
+               (log/debug (format "caught exception: %s" e))
+               (log/debug (format "unable to call %s on %s in %s" afn val amap))
                []
                )))
          amap)))
