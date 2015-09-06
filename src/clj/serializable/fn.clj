@@ -18,17 +18,19 @@
           nil
           (symbol (mangle-name  (str *ns* "_sfn_" line \_ column))))))
 
-(defn- save-env [bindings form fn-name]
-  (let [
-        namespace (str *ns*)
-        ; replace core/fn , with serializable/fn
-        ; give anonymous fn a name, so it will show up in stacktraces
-        form (with-meta (cons `fn (if fn-name
-                                    (cons  fn-name (rest form))
-                                    (rest form)
-                                    ))
+(defn- symbols [sexp]
+  "Returns just the symbols from the expression, including those
+   inside literals (sets, maps, lists, vectors)."
+  (set (filter symbol? (tree-seq coll? seq sexp))))
+
+(defn- save-env [bindings form]
+  (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
                (meta form))
-        savers (for [^clojure.lang.Compiler$LocalBinding b bindings]
+        namespace (str *ns*)
+        used-symbols (symbols (rest form))
+        used-bindings (filter (clojure.core/fn [^clojure.lang.Compiler$LocalBinding b]
+                                (used-symbols (.sym b))) bindings)
+        savers (for [^clojure.lang.Compiler$LocalBinding b used-bindings]
                  [(str (.sym b)) (.sym b)])
         env-form `(into {} ~(vec savers))]
     ;; without the print-dup, it sometimes serializes invalid code strings (with subforms replaced with "#")
