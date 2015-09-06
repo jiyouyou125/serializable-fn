@@ -14,19 +14,24 @@
 (defn- generate-function-name [line column form]
   (let [first-param (first (rest form))
         custom-fn-name? (not (vector? first-param))]
-        (if custom-fn-name?
-          nil
-          (symbol (mangle-name  (str *ns* "_sfn_" line \_ column))))))
+    (if custom-fn-name?
+      nil
+      (symbol (mangle-name  (str *ns* "_sfn_" line \_ column))))))
 
 (defn- symbols [sexp]
   "Returns just the symbols from the expression, including those
    inside literals (sets, maps, lists, vectors)."
   (set (filter symbol? (tree-seq coll? seq sexp))))
 
-(defn- save-env [bindings form]
-  (let [form (with-meta (cons `fn (rest form)) ; serializable/fn, not core/fn
+(defn- save-env [bindings form fn-name]
+  (let [namespace (str *ns*)
+        ;; replace core/fn , with serializable/fn
+        ;; give anonymous fn a name, so it will show up in stacktraces
+        form (with-meta
+               (cons `fn (if fn-name
+                           (cons  fn-name (rest form))
+                           (rest form)))
                (meta form))
-        namespace (str *ns*)
         used-symbols (symbols (rest form))
         used-bindings (filter (clojure.core/fn [^clojure.lang.Compiler$LocalBinding b]
                                 (used-symbols (.sym b))) bindings)
