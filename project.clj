@@ -1,4 +1,4 @@
-(defproject yieldbot/serializable-fn "0.1.0"
+(defproject yieldbot/serializable-fn "0.1.1"
   :url "http://github.com/sorenmacbeth/serializable-fn"
   :description "Serializable functions in Clojure"
   :min-lein-version "2.0.0"
